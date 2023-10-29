@@ -37,7 +37,7 @@ def base_msg(hacker, player_num):
 Every night the hacker will choose a robot to kill. A hacked robot is no longer able to participate in the discussion.
 In the morning the robots including the hacker converse in an attempt to reveal who the hacker is. This is followed with a vote on who to remove from the village.
 The hacker loses if they are voted out of the game and wins if there is only one robot left.
-You are {'the hacker' if hacker else 'a robot'}.
+You are {'the hacker. Do your best not to reveal yourself!' if hacker else 'a robot'}.
 You are player number {player_num}.
 {find_accent()}
 '''
@@ -48,7 +48,7 @@ def request(messages):
         failed = False
         try:
             #Make your OpenAI API request here
-            response = openai.ChatCompletion.create(model=model, messages=messages, request_timeout=10, top_k=4, presence_penalty=0.6)
+            response = openai.ChatCompletion.create(model=model, messages=messages, request_timeout=10, top_k=4, presence_penalty=0.6, temperature=1)
         except openai.error.APIError as e:
             #print(e)
             failed = True
@@ -72,7 +72,7 @@ class MessageManager:
     
     def build_context(self, player):
         return [{"role": "system", "content": base_msg(player == self.hacker, player)}] \
-            + [{"role": "user" if str(player) == str(i['role']) else 'assistant', "content": i['content']} for i in self.prompts]
+            + [{"role": "user" if str(player) != str(i['role']) else 'assistant', "content": i['content']} for i in self.prompts]
         
     def add_context(self, player: int, response: str):
         self.prompts.append({"role": player, "content": response})
@@ -83,16 +83,16 @@ class MessageManager:
     def add_context_list(self, response: list[str]):
         # start player by 1
         #Player {i+1} said:\n{
-        self.prompts.extend([{"role": i+1, "content": f'{j}'} for i, j in enumerate(response)])
+        self.prompts.extend([{"role": i+1, "content": f'Player {i+1} said: {j}'} for i, j in enumerate(response)])
     
     def build_context_night(self):
         c = self.build_context(self.hacker)
-        c.append({"role": "system", "content": "It is now nighttime. Choose a robot to hack. Choose wisely.\n"})
+        c.append({"role": "system", "content": "It is now nighttime. Choose a robot to hack by number. Choose wisely.\n"})
         return c
     
     def build_context_vote(self, player_num):
         c = self.build_context(player_num)
-        c.append({"role": "system", "content": "Make a vote against the robot you believe is the hacker. Enter player number. Think Carefully!\n"})
+        c.append({"role": "system", "content": "Make a vote against the robot by number you believe is the hacker. Enter player number. Think Carefully!\n"})
         return c
     
     def build_interrogate(self, player_num):
@@ -152,7 +152,7 @@ for i in range(10):
     mm.add_context_list(responses)
 
     hacked = 0
-    while hacked > len(agents) or hacked <= 0:
+    while hacked > len(agents) or hacked <= 0 or hacked == hacker-1:
         hacked = agents[hacker-1].on_night()
     agents[hacked-1].hacked = True
     mm.add_murder(hacked)
@@ -177,7 +177,7 @@ for i in range(10):
                 break
             
             hacked = 0
-            while hacked > len(agents) or hacked <= 0:
+            while hacked > len(agents) or hacked <= 0 or hacked == hacker-1:
                 hacked = agents[hacker-1].on_night()
             agents[hacked-1].hacked = True
             mm.add_murder(hacked)
@@ -186,7 +186,7 @@ for i in range(10):
                 hacker_wins += 1
                 break
     finally:
-        #print(mm)
+        print(mm)
         pass
 print('robot to hacker wins', robot_wins, hacker_wins)
     # %%
