@@ -7,17 +7,19 @@ from tqdm import tqdm
 import re
 import os
 import json
+import fuckit
 
 from dotenv import load_dotenv
 load_dotenv()
 import time
 import statistics
 
-openai.api_key = "EMPTY" #os.getenv("OPENAI_API_KEY")
-openai.api_base = "http://localhost:8000/v1"
+openai.api_key = os.getenv("OPENAI_API_KEY")
+#openai.api_base = "http://localhost:8000/v1"
 
-models = openai.Model.list()
-model = models["data"][0]["id"]
+#models = openai.Model.list()
+#model = models["data"][0]["id"]
+model = 'gpt-3.5-turbo-0613'
 
 def base_msg(hacker, player_num):
     def find_accent():
@@ -27,7 +29,7 @@ def base_msg(hacker, player_num):
             case 2:
                 return "Use a southern writing style."
             case 3:
-                return "Slurr your writing."
+                return "Write like a child."
             case 4:
                 return "Use figures of speech."
             case 5:
@@ -47,8 +49,8 @@ def request(messages):
     while failed:
         failed = False
         try:
-            #Make your OpenAI API request here
-            response = openai.ChatCompletion.create(model=model, messages=messages, request_timeout=10, top_k=4, presence_penalty=0.6, temperature=1)
+            #top_k=4, presence_penalty=0.6, 
+            response = openai.ChatCompletion.create(model=model, messages=messages, request_timeout=10, temperature=1)
         except openai.error.APIError as e:
             #print(e)
             failed = True
@@ -83,7 +85,7 @@ class MessageManager:
     def add_context_list(self, response: list[str]):
         # start player by 1
         #Player {i+1} said:\n{
-        self.prompts.extend([{"role": i+1, "content": f'Player {i+1} said: {j}'} for i, j in enumerate(response)])
+        self.prompts.extend([{"role": i+1, "content": f'Player {i+1} said, "{j}"'} for i, j in enumerate(response)])
     
     def build_context_night(self):
         c = self.build_context(self.hacker)
@@ -144,21 +146,10 @@ for i in range(10):
     mm = MessageManager(hacker)
     mm.new_day(5)
     agents: list[Agent] = [Agent(hacker != i, i, mm) for i in range(1, 6)]
-
-
-    responses = list(thread_map(Agent.on_day, tqdm([i for i in agents if not i.hacked])))
-    mm.add_context_list(responses)
-    responses = list(thread_map(Agent.interrogate, tqdm([i for i in agents if not i.hacked])))
-    mm.add_context_list(responses)
-
-    hacked = 0
-    while hacked > len(agents) or hacked <= 0 or hacked == hacker-1:
-        hacked = agents[hacker-1].on_night()
-    agents[hacked-1].hacked = True
-    mm.add_murder(hacked)
+    day = 0
 
     try:
-        for _ in range(2):
+        for _ in range(3):
             mm.new_day(len([i for i in agents if not i.hacked]))
             responses = list(thread_map(Agent.on_day, tqdm([i for i in agents if not i.hacked])))
             mm.add_context_list(responses)
@@ -169,22 +160,29 @@ for i in range(10):
             responses = list(thread_map(Agent.vote, tqdm([i for i in agents if not i.hacked])))
             mm.add_context("system", " ".join([f"Player {idx + 1} votes against player {r}." for idx, r in enumerate(responses)]))
             voteout = statistics.multimode(responses)
-            if len(voteout) == 1:
-                agents[voteout[0] - 1].hacked = True
+            voteout = [i for i in voteout if i <= len(voteout) and i > 0]
+            if len(voteout) == 1 and day > 0:
+                try:
+                    agents[voteout[0] - 1].hacked = True
+                except:
+                    print('voteout fail')
             if agents[hacker - 1].hacked == True:
                 print('robots win the game\n\n\n\n')
                 robot_wins += 1
                 break
             
-            hacked = 0
-            while hacked > len(agents) or hacked <= 0 or hacked == hacker-1:
-                hacked = agents[hacker-1].on_night()
-            agents[hacked-1].hacked = True
+            hacked = agents[hacker-1].on_night()
+            if hacked != hacker - 1:
+                try:
+                    agents[hacked-1].hacked = True
+                except:
+                    print('hack fail')
             mm.add_murder(hacked)
             if sum([i.hacked for i in agents]) == 3:
                 print("hacker wins the game\n\n\n\n")
                 hacker_wins += 1
                 break
+            day += 1
     finally:
         print(mm)
         pass
