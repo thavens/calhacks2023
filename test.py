@@ -13,7 +13,7 @@ In the morning the robots including the hacker converse in an attempt to reveal 
 The hacker loses if they are voted out of the game and wins if there is only one robot left.
 Every player will be 'Player [a number from 1 to {NUM_PLAYER}]'
 
-Once you have been eliminated, you're not supposed to take part in discussion and return the string "Hacked" when it is your turn
+Once you have been eliminated, you're not supposed to take part in discussion and return the string "Hacked" and nothing else when it is your turn.
 
 You are not simulating the game, so you shouldn't simulate what the response of others should be, 
 instead just focus on your own response to the context. 
@@ -35,24 +35,24 @@ class Agent:
         prompt = """It is now night time. Choose a robot to hack. Once you made your choice please 
         only return a response in this format "Player {your choice} has been eliminated" and nothing else"""
         return self.request(prompt)
-        # return response.choices[0]['message']['content']
     
     def on_day(self, day_response):
-        prompt = "It is now daytime, begin discussing amongst the other players who you suspect is the hacker. Keep reponses to less than 150 words."
-        if '' not in day_response:
+        prompt = '''It is now daytime, begin discussing amongst the other players who you suspect is the hacker. 
+        You don't have access to any body language but just the context and responses from other players. 
+        Keep reponses to less than 50 words.'''
+        if None not in day_response:
             prompt += 'Here are the previous responses of other players, including youself:\n' + repr(day_response)
         return self.request(prompt)
-        # print(f"\nPlayer {self.player_num}: {response.choices[0]['message']['content']}\n")
-
+    
     def request(self, prompt=None):
         messages = [{'role': 'system', 'content': context(self)}]
+        if state_context:
+            messages += [{'role': 'system', 'content': state_context}]
         messages += self.context
         messages += [{'role': 'user', 'content': prompt}]
 
         if state_context:
             messages.insert(1, {'role': 'system', 'content': state_context})
-
-        print(messages)
 
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -77,19 +77,19 @@ if __name__ == '__main__':
     state_context = ''
 
     while True:
-        event = None
         for player in players:
-            event = event or player.on_night()
+            if (x := player.on_night()):
+                event = x
         
         state_context += f'\nNight {night_num}. {event}'
         print(state_context)
 
-        day_response = ['', '', '', '', '']
-        temp = list(day_response) 
+        statements = [None, None, None, None, None]
         while True:
+            prev_statements = list(statements)
             for i, player in enumerate(players):
-                response = player.on_day(day_response)
-                day_response[i] = {f'Player {player.player_num}': response}
+                response = player.on_day(prev_statements)
+                statements[i] = {f'Player {player.player_num}': response}
                 print(f'Player {player.player_num}:\n{response}')
                 input("\nPress Enter to continue...\n")
 
